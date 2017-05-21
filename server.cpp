@@ -80,7 +80,7 @@ int main ()
             printf("[Server] Server has got connected from %s.\n", inet_ntoa(addr_remote.sin_addr));
 
         /*Receive File from Client */
-        char* fr_name = "/home/aryan/Desktop/receive.txt";
+        char* fr_name = "../receive.txt";
         FILE *fr = fopen(fr_name, "a");
         if(fr == NULL)
             printf("File %s Cannot be opened file on server.\n", fr_name);
@@ -123,7 +123,7 @@ int main ()
         /* Send File to Client */
         //if(!fork())
         //{
-        char* fs_name = "/home/aryan/Desktop/output.txt";
+        char* fs_name = "../output.txt";
         char sdbuf[LENGTH]; // Send buffer
         printf("[Server] Sending %s to the Client...", fs_name);
         FILE *fs = fopen(fs_name, "r");
