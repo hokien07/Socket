@@ -1,42 +1,119 @@
-//
-// Created by HOKIEN on 5/18/2017.
-//
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <sys/wait.h>
+#include <sys/socket.h>
+#include <signal.h>
+#include <ctype.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
-void UploadFile(SOCKET Socket){
-    if(Socket == NULL){
-        return;
+#define PORT 20000
+#define LENGTH 512
+
+
+void error(const char *msg)
+{
+    perror(msg);
+    exit(1);
+}
+
+int main(int argc, char *argv[])
+{
+    /* Variable Definition */
+    int sockfd;
+    int nsockfd;
+    char revbuf[LENGTH];
+    struct sockaddr_in remote_addr;
+
+    /* Get the Socket file descriptor */
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+    {
+        fprintf(stderr, "ERROR: Failed to obtain Socket Descriptor! (errno = %d)\n",errno);
+        exit(1);
     }
-    while(1){
-        char filename[1024];
-        recv(Socket, filename, sizeof(filename), 0);
-        if(filename[0] == '.'){
-            break;
+
+    /* Fill the socket address struct */
+    remote_addr.sin_family = AF_INET;
+    remote_addr.sin_port = htons(PORT);
+    inet_pton(AF_INET, "127.0.0.1", &remote_addr.sin_addr);
+    bzero(&(remote_addr.sin_zero), 8);
+
+    /* Try to connect the remote */
+    if (connect(sockfd, (struct sockaddr *)&remote_addr, sizeof(struct sockaddr)) == -1)
+    {
+        fprintf(stderr, "ERROR: khong connect dc toi host! (errno = %d)\n",errno);
+        exit(1);
+    }
+    else
+        printf("[Client] Connected to server at port %d...ok!\n", PORT);
+
+    char* fs_name = "../quotidiani.txt";
+    char sdbuf[LENGTH];
+    printf("[Client] dang gui %s toi  Server... ", fs_name);
+    FILE *fs = fopen(fs_name, "r");
+    if(fs == NULL)
+    {
+        printf("ERROR: File %s khong ton tai.\n", fs_name);
+        exit(1);
+    }
+
+    bzero(sdbuf, LENGTH);
+    int fs_block_sz;
+    while((fs_block_sz = fread(sdbuf, sizeof(char), LENGTH, fs)) > 0)
+    {
+        if(send(sockfd, sdbuf, fs_block_sz, 0) < 0)
+        {
+            fprintf(stderr, "ERROR: recv() file loi %s. (errno = %d)\n", fs_name, errno);
+            exit(1);
         }
-        FILE* fp = fopen(filename, "r");
-        fseek(fp, 0, SEEK_END);
-        long FileSize = ftell(fp);
-        char GotFileSize[1024];
-        _itoa_s(FileSize, GotFileSize, 10);
-        send(Socket, GotFileSize, 1024, 0);
-        rewind(fp);
-        long SizeCheck = 0;
-        char* mfcc;
-        if(FileSize > 1499){
-            mfcc = (char*)malloc(1500);
-            while(SizeCheck < FileSize){
-                int Read = fread_s(mfcc, 1500, sizeof(char), 1500, fp);
-                int Sent = send(Socket, mfcc, Read, 0);
-                SizeCheck += Sent;
+        bzero(sdbuf, LENGTH);
+    }
+    shutdown(sockfd, SHUT_WR);
+    printf("File %s da duoc gui di\n", fs_name);
+    //}
+
+    /* Receive File from Server */
+    printf("[Client] file gui toi server duoc luu voi ten final.txt...");
+    char* fr_name = "../final.txt";
+    FILE *fr = fopen(fr_name, "a");
+    if(fr == NULL)
+        printf("File %s Khong mo duoc.\n", fr_name);
+    else
+    {
+        bzero(revbuf, LENGTH);
+        int fr_block_sz = 0;
+        while((fr_block_sz = recv(sockfd, revbuf, LENGTH, 0)) > 0)
+        {
+            int write_sz = fwrite(revbuf, sizeof(char), fr_block_sz, fr);
+            if(write_sz < fr_block_sz)
+            {
+                error("Khong ghi duoc file.\n");
+            }
+            bzero(revbuf, LENGTH);
+            if (fr_block_sz == 0 || fr_block_sz != 512)
+            {
+                break;
             }
         }
-        else{
-            mfcc = (char*)malloc(FileSize + 1);
-            fread_s(mfcc, FileSize, sizeof(char), FileSize, fp);
-            send(Socket, mfcc, FileSize, 0);
+        if(fr_block_sz < 0)
+        {
+            if (errno == EAGAIN)
+            {
+                printf("vuot qua time gui.\n");
+            }
+            else
+            {
+                fprintf(stderr, "recv() file loi = %d\n", errno);
+            }
         }
-        fclose(fp);
-        Sleep(500);
-        free(mfcc);
+        printf("Ok file da duoc gui!\n");
+        fclose(fr);
     }
-    return;
+    close (sockfd);
+    printf("[Client] khong connect duoc.\n");
+    return (0);
 }
